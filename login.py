@@ -9,7 +9,7 @@ try:
 except ImportError:
     # Ini hanya placeholder jika app2.py belum ada/gagal diimport
     def main_app():
-        st.error("Error: File aplikasi utama (app2.py) tidak ditemukan atau gagal diimpor.")
+        st.error(importError)
         st.stop()
 
 
@@ -46,4 +46,5 @@ def check_login():
         main_app()
 
 if __name__ == "__main__":
+
     check_login()
