@@ -10,17 +10,37 @@ import math
 import cv2
 
 st.set_page_config(page_title="Deteksi Kerusakan Dinding (OBB)", layout="wide")
+st.sidebar.markdown("## Referensi Model")
+st.sidebar.markdown(
+    """
+    Model ini dikembangkan menggunakan **Ultralytics YOLOv8**.
+    
+    ### Sitasi (BibTeX):
+    ```bibtex
+    @software{yolov8_ultralytics,
+      author = {Glenn Jocher and Ayush Chaurasia and Jing Qiu},
+      title = {Ultralytics YOLOv8},
+      version = {8.0.0},
+      year = {2023},
+      url = {[https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)},
+      orcid = {0000-0001-5950-6979, 0000-0002-7603-6750, 0000-0003-3783-7069},
+      license = {AGPL-3.0}
+    }
+    ```
+    """
+)
+st.sidebar.markdown("---")
 
 st.markdown(
     """
     <style>
-        img {
-            max-width: 60% !important;
-            height: auto !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-            display: block !important;
-        }
+        img {
+            max-width: 60% !important;
+            height: auto !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            display: block !important;
+        }
     </style>
     """,
     unsafe_allow_html=True
@@ -41,38 +61,140 @@ def load_model():
 
 model = load_model()
 
+# --- CALLBACK FUNCTIONS UNTUK SINKRONISASI ---
+def sync_conf_slider():
+    st.session_state.conf_input = st.session_state.conf_slider
+    st.session_state.conf_value = st.session_state.conf_slider
+
+def sync_conf_input():
+    st.session_state.conf_slider = st.session_state.conf_input
+    st.session_state.conf_value = st.session_state.conf_input
+
+def sync_iou_slider():
+    st.session_state.iou_input = st.session_state.iou_slider
+    st.session_state.iou_value = st.session_state.iou_slider
+
+def sync_iou_input():
+    st.session_state.iou_slider = st.session_state.iou_input
+    st.session_state.iou_value = st.session_state.iou_input
+
+def sync_imgsz_slider():
+    # Menemukan opsi terdekat untuk number input, karena select_slider memiliki opsi diskrit
+    imgsz_options = [320, 480, 640, 800, 1024]
+    closest_value = min(imgsz_options, key=lambda x: abs(x - st.session_state.imgsz_slider))
+    st.session_state.imgsz_input = closest_value
+    st.session_state.imgsz_value = closest_value
+
+def sync_imgsz_input():
+    # Menemukan opsi terdekat dari input untuk select slider
+    imgsz_options = [320, 480, 640, 800, 1024]
+    closest_value = min(imgsz_options, key=lambda x: abs(x - st.session_state.imgsz_input))
+    st.session_state.imgsz_slider = closest_value
+    st.session_state.imgsz_value = closest_value
+# --- MODIFIKASI DIMULAI DI SINI ---
 with st.expander("Pengaturan Deteksi Model", expanded=True):
     col_conf, col_iou, col_imgsz = st.columns(3)
     
+    # Inisialisasi Session State jika belum ada
+    if 'conf_value' not in st.session_state:
+        st.session_state['conf_value'] = 0.25
+        st.session_state['conf_input'] = 0.25
+        st.session_state['conf_slider'] = 0.25
+    if 'iou_value' not in st.session_state:
+        st.session_state['iou_value'] = 0.45
+        st.session_state['iou_input'] = 0.45
+        st.session_state['iou_slider'] = 0.45
+    if 'imgsz_value' not in st.session_state:
+        st.session_state['imgsz_value'] = 480
+        st.session_state['imgsz_input'] = 480
+        st.session_state['imgsz_slider'] = 480
+        
+    # 1. CONFIDENCE THRESHOLD
     with col_conf:
+        
+        # Number Input: Mengatur Slider saat nilai input diubah
+        st.number_input(
+            "1. Nilai Confidence (Input)",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.conf_input,
+            step=0.001,
+            format="%.3f",
+            key="conf_input",
+            on_change=sync_conf_input 
+        )
+        
+        # Slider: Mengatur Number Input saat slider digeser
         conf_threshold = st.slider(
             "Batas Keyakinan (Confidence)", 
             min_value=0.0, 
             max_value=1.0, 
-            value=0.25,
+            value=st.session_state.conf_slider, 
             step=0.001,
             format="%.3f",
-            key="conf_slider"
+            key="conf_slider",
+            on_change=sync_conf_slider
         )
-    
+        
+        # Ambil nilai final yang disinkronkan
+        conf_threshold = st.session_state.conf_value
+
+    # 2. IOU THRESHOLD
     with col_iou:
+        
+        # Number Input
+        st.number_input(
+            "2. Nilai IOU (Input)",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.iou_input,
+            step=0.001,
+            format="%.3f",
+            key="iou_input",
+            on_change=sync_iou_input
+        )
+        
+        # Slider
         iou_threshold = st.slider(
             "IOU Threshold (NMS)", 
             min_value=0.0, 
             max_value=1.0, 
-            value=0.45,
+            value=st.session_state.iou_slider,
             step=0.001,
             format="%.3f",
-            key="iou_slider"
+            key="iou_slider",
+            on_change=sync_iou_slider
         )
-    
+        
+        iou_threshold = st.session_state.iou_value
+
+    # 3. IMGSZ (UKURAN GAMBAR)
     with col_imgsz:
+        imgsz_options = [320, 480, 640, 800, 1024]
+        
+        # Number Input
+        st.number_input(
+            "3. Ukuran Gambar (Input)",
+            min_value=imgsz_options[0],
+            max_value=imgsz_options[-1],
+            value=st.session_state.imgsz_input,
+            step=32, 
+            key="imgsz_input",
+            on_change=sync_imgsz_input
+        )
+        
+        # Select Slider (hanya menerima opsi diskrit)
         imgsz_choice = st.select_slider(
             "Ukuran Gambar Input (imgsz)",
-            options=[320, 480, 640, 800, 1024],
-            value=480
+            options=imgsz_options,
+            value=st.session_state.imgsz_slider,
+            key="imgsz_slider",
+            on_change=sync_imgsz_slider
         )
-
+        
+        imgsz_choice = st.session_state.imgsz_value
+    
+    # KELAS KERUSAKAN 
     selected_class_indices = None
     if model is not None and hasattr(model, 'names'):
         all_classes = list(model.names.values())
@@ -82,6 +204,7 @@ with st.expander("Pengaturan Deteksi Model", expanded=True):
             default=all_classes,
         )
         selected_class_indices = [k for k, v in model.names.items() if v in selected_classes]
+# --- MODIFIKASI SELESAI DI SINI ---
 
 st.markdown("---")
 uploaded_files = st.file_uploader("Unggah Gambar Kerusakan Dinding (jpg/jpeg/png). Unggah banyak gambar untuk analisis trend.", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
@@ -504,4 +627,3 @@ else:
         st.warning("Model tidak ditemukan. Pastikan path model di kode `app.py` sudah benar.")
     else:
         st.info("Silakan unggah minimal satu gambar untuk memulai deteksi. Gunakan pengaturan model untuk hasil yang lebih optimal.")
-
