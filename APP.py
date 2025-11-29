@@ -320,6 +320,19 @@ def process_image(file, model, conf_threshold, iou_threshold, imgsz_choice, sele
         'mask': mask,
         'report': report
     }
+def make_json_safe(obj):
+    if isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(v) for v in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, (np.int32, np.int64)):
+        return int(obj)
+    else:
+        return obj
 
 if uploaded_files and model is not None:
     results_all = []
@@ -431,8 +444,10 @@ if uploaded_files and model is not None:
         
         with col_csv:
             st.download_button('Unduh Trend CSV', data=csv_bytes, file_name=f'trend_analisis_{int(time.time())}.csv', mime='text/csv')
+            
+        safe_report = make_json_safe([r['report'] for r in results_all])
+        json_bytes = json.dumps(safe_report, indent=2).encode('utf-8')
 
-        json_bytes = json.dumps([r['report'] for r in results_all], indent=2).encode('utf-8')
         with col_json:
             st.download_button('Unduh Laporan JSON (Detail)', data=json_bytes, file_name=f'laporan_detail_{int(time.time())}.json', mime='application/json')
 
@@ -489,3 +504,4 @@ else:
         st.warning("Model tidak ditemukan. Pastikan path model di kode `app.py` sudah benar.")
     else:
         st.info("Silakan unggah minimal satu gambar untuk memulai deteksi. Gunakan pengaturan model untuk hasil yang lebih optimal.")
+
